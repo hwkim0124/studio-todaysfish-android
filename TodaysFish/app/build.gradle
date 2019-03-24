@@ -30,4 +30,12 @@ dependencies {
     testImplementation 'junit:junit:4.12'
     androidTestImplementation 'com.android.support.test:runner:1.0.2'
     androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
+
+    // Kotlin logging extensions for Timber
+    // https://github.com/ajalt/timberkt
+    implementation 'com.github.ajalt:timberkt:1.5.1'
+
+    // Opencsv is an easy-to-use CSV (comma-separated values) parser library for Java
+    // http://opencsv.sourceforge.net/
+    implementation 'com.opencsv:opencsv:4.5'
 }
