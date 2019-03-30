@@ -38,4 +38,21 @@ dependencies {
     // Opencsv is an easy-to-use CSV (comma-separated values) parser library for Java
     // http://opencsv.sourceforge.net/
     implementation 'com.opencsv:opencsv:4.5'
+
+    // Retrofit, A type-safe HTTP client for Android and Java
+    // https://square.github.io/retrofit/
+    implementation 'com.squareup.retrofit2:retrofit:2.5.0'
+    implementation 'com.squareup.retrofit2:converter-moshi:2.5.0'
+
+    // A Retrofit 2 adapter for Kotlin coroutine's Deferred type.
+    // https://github.com/JakeWharton/retrofit2-kotlin-coroutines-adapter
+    implementation 'com.jakewharton.retrofit:retrofit2-kotlin-coroutines-adapter:0.9.2'
+
+    // Library support for Kotlin coroutines
+    // https://github.com/Kotlin/kotlinx.coroutines
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.1.1'
+
+    // A material style progress wheel compatible with 2.3
+    // https://github.com/pnikosis/materialish-progress
+    implementation 'com.pnikosis:materialish-progress:1.7'
 }
