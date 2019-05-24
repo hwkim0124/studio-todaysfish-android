@@ -38,7 +38,14 @@ object RestAPI {
     suspend fun updateGpsCoordinatesOfAddressAsync(data: Address
     ) : RestResult<ResponseResult>
     {
+        // Conceptually, async is just like launch. It starts a separate coroutine which is a light-weight
+        // thread that works concurrently with all the other coroutines.
+        // The difference is that launch returns a Job and does not carry any resulting value, while
+        // async returns a Defferred.
+        // https://kotlinlang.org/docs/reference/coroutines/composing-suspending-functions.html
+
         try {
+            // Any exception during await() relies on the user to be consumed.
             val res = RestApi.updateGpsCoordinatesOfAddressAsync(data).await()
             if (res.isSuccessful) {
                 // The rest api request was completed by response from the server,

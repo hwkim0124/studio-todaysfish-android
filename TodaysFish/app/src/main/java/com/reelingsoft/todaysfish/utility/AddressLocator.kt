@@ -99,11 +99,11 @@ object AddressLocator {
 
         for (item in list) {
             var coords = getGpsCoordinatesFromLocation(context, item.name())
-
+            /*
             if (item.code == 1004060100) {
                 coords = GpsCoordinates(35.586284, 129.062026)
             }
-
+            */
             if (coords != null) {
                 item.setGpsCoordinates(coords)
                 Timber.d("${item.name()} assigned to $coords")
