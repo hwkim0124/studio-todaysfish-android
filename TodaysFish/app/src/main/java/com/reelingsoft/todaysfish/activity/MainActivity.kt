@@ -47,7 +47,7 @@ class MainActivity : AppCompatActivity(),
 
 
     private fun startPreviewActivity() {
-        val intent = Intent(this, PreviewActivity.javaClass)
+        val intent = Intent(this, PreviewActivity::class.java)
         startActivity(intent)
         overridePendingTransition(R.anim.abc_slide_in_bottom, R.anim.abc_slide_out_top)
     }

@@ -40,11 +40,12 @@ class PreviewActivity : CameraActivity(), ImageReader.OnImageAvailableListener {
     private var luminanceCopy: ByteArray? = null
 
 
+    /*
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_preview)
     }
-
+    */
 
     override fun onPreviewSizeChosen(size: Size, rotation: Int) {
         val textSizePix = TypedValue.applyDimension(
@@ -75,13 +76,16 @@ class PreviewActivity : CameraActivity(), ImageReader.OnImageAvailableListener {
         sensorOrientation = rotation - getScrrenOrientation()
         Timber.i("Camera orientation relative to screen canvas: $sensorOrientation")
 
+        val targetWidth = MODEL_INPUT_WIDTH
+        val targetHeight = MODEL_INPUT_HEIGHT
+
         Timber.i("Initializing at preview size $previewWidth x $previewHeight")
         rgbFrameBitmap = Bitmap.createBitmap(previewWidth, previewHeight, Bitmap.Config.ARGB_8888)
-        cropCopyBitmap = Bitmap.createBitmap(MODEL_INPUT_WIDTH, MODEL_INPUT_HEIGHT, Bitmap.Config.ARGB_8888)
+        croppedBitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
 
         frameToCropTransform = ImageUtils.getTransformationMatrix(
             previewWidth, previewHeight,
-            MODEL_INPUT_WIDTH, MODEL_INPUT_HEIGHT,
+            targetWidth, targetHeight,
             sensorOrientation, MAINTAIN_ASPECT
         )
 
@@ -103,6 +107,8 @@ class PreviewActivity : CameraActivity(), ImageReader.OnImageAvailableListener {
         tracker.onFrame(
             previewWidth,
             previewHeight,
+            surfaceWidth,
+            surfaceHeight,
             getLuminanceStride(),
             sensorOrientation,
             originalLuminance,
@@ -119,7 +125,10 @@ class PreviewActivity : CameraActivity(), ImageReader.OnImageAvailableListener {
         computingDetection = true
         Timber.i("Preparing image $currTimestamp for detection in bg thread.")
 
+        val startTime = SystemClock.uptimeMillis()
         rgbFrameBitmap.setPixels(getRgbBytes(), 0, previewWidth, 0, 0, previewWidth, previewHeight)
+        lastProcessingTimeMs = SystemClock.uptimeMillis() - startTime
+        Timber.i("Image processing time: $lastProcessingTimeMs")
 
         if (luminanceCopy == null) {
             luminanceCopy = ByteArray(originalLuminance.size)
@@ -131,41 +140,46 @@ class PreviewActivity : CameraActivity(), ImageReader.OnImageAvailableListener {
         canvas.drawBitmap(rgbFrameBitmap, frameToCropTransform, null)
 
         // For examining the actual TF input.
-        if (SAVE_PREVIEW_BITMAP) {
-            ImageUtils.saveBitmap(croppedBitmap)
+        if (false) { // SAVE_PREVIEW_BITMAP) {
+            if (currTimestamp.rem(20) == 0L) {
+                ImageUtils.saveBitmap(croppedBitmap)
+            }
         }
 
         runInBackground(
             Runnable {
-                Timber.i("Running detection on image $currTimestamp")
-                val startTime = SystemClock.uptimeMillis()
-                val results = detector.recognizeImage(croppedBitmap)
-                lastProcessingTimeMs = SystemClock.uptimeMillis() - startTime
+                if (true) {
+                    Timber.i("Running detection on image $currTimestamp")
+                    val startTime = SystemClock.uptimeMillis()
+                    val results = detector.recognizeImage(croppedBitmap)
+                    lastProcessingTimeMs = SystemClock.uptimeMillis() - startTime
+                    Timber.i("Inference time: $lastProcessingTimeMs")
 
-                cropCopyBitmap = Bitmap.createBitmap(croppedBitmap)
-                val canvas2 = Canvas(cropCopyBitmap)
-                val paint = Paint()
-                paint.color = Color.RED
-                paint.style = Paint.Style.STROKE
-                paint.strokeWidth = 2.0f
+                    cropCopyBitmap = Bitmap.createBitmap(croppedBitmap)
+                    val canvas2 = Canvas(cropCopyBitmap)
+                    val paint = Paint()
+                    paint.color = Color.RED
+                    paint.style = Paint.Style.STROKE
+                    paint.strokeWidth = 2.0f
 
-                val mappedResults = mutableListOf<Detector.Recognition>()
+                    val mappedResults = mutableListOf<Detector.Recognition>()
 
-                for (r in results) {
-                    val location = r.location
-                    if (location != null && r.confidence!! > DETECTOR_MINIMUM_CONFIDENCE) {
-                        canvas2.drawRect(location, paint)
-                        cropToFrameTransform.mapRect(location)
+                    for (r in results) {
+                        val location = r.location
+                        if (location != null && r.confidence!! > DETECTOR_MINIMUM_CONFIDENCE) {
+                            canvas2.drawRect(location, paint)
+                            cropToFrameTransform.mapRect(location)
 
-                        r.location = location
-                        mappedResults.add(r)
+                            r.location = location
+                            mappedResults.add(r)
+                        }
                     }
+
+                    tracker.trackResults(mappedResults, luminanceCopy!!, currTimestamp)
+                    overlay_tracking.postInvalidate()
+
+                    computingDetection = false
                 }
-
-                tracker.trackResults(mappedResults, luminanceCopy!!, currTimestamp)
-                overlay_tracking.postInvalidate()
-
-                computingDetection = false
 
                 runOnUiThread {
 
@@ -187,7 +201,7 @@ class PreviewActivity : CameraActivity(), ImageReader.OnImageAvailableListener {
 
     companion object {
         private const val MODEL_INPUT_WIDTH = 320
-        private const val MODEL_INPUT_HEIGHT = 256
+        private const val MODEL_INPUT_HEIGHT = 240
         private const val DETECTOR_MODEL_FILE = "shufflenet.tflite"
         private const val DETECTOR_MINIMUM_CONFIDENCE = 0.5f
         private const val DESIRED_PREVIEW_WIDTH = 640

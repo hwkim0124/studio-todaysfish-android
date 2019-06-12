@@ -3,7 +3,7 @@ package com.reelingsoft.todaysfish.tflite
 
 object ClassLabels {
 
-    private const val NUM_CLASSES = 36
+    const val NUM_CLASSES = 36
     lateinit var classes: Array<String>
 
     init {

@@ -21,6 +21,7 @@ import com.reelingsoft.todaysfish.R
 import com.reelingsoft.todaysfish.fragment.CameraConnectionFragment
 import com.reelingsoft.todaysfish.fragment.LegacyCameraConnectionFragment
 import com.reelingsoft.todaysfish.utility.ImageUtils
+import kotlinx.android.synthetic.main.activity_camera.*
 import timber.log.Timber
 import java.lang.Exception
 
@@ -37,6 +38,8 @@ open class CameraActivity: AppCompatActivity(),
     private var yRowStride: Int = 0
     protected var previewHeight: Int = 0
     protected var previewWidth: Int = 0
+    protected var surfaceHeight: Int = 0
+    protected var surfaceWidth: Int = 0
 
     private var imageConverter: Runnable? = null
     private var postInferenceCallback: Runnable? = null
@@ -50,6 +53,10 @@ open class CameraActivity: AppCompatActivity(),
 
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         setContentView(R.layout.activity_camera)
+
+        if (!hasPermission2()) {
+            requestPermission2()
+        }
 
         if (hasPermission()) {
             setFragment()
@@ -119,6 +126,7 @@ open class CameraActivity: AppCompatActivity(),
             image ?: return
 
             if (isProcessingFrame) {
+                Timber.w("Dropping frame!")
                 image.close()
                 return
             }
@@ -244,10 +252,15 @@ open class CameraActivity: AppCompatActivity(),
             val camera2Fragment =
                     CameraConnectionFragment.newInstance(
                         object: CameraConnectionFragment.ConnectionCallback {
-                            override fun onPreviewSizeChosen(size: Size, cameraRotation: Int) {
+                            override fun onPreviewSizeChosen2(size: Size, cameraRotation: Int) {
                                 previewHeight = size.height
                                 previewWidth = size.width
-                                this.onPreviewSizeChosen(size, cameraRotation)
+                                onPreviewSizeChosen(size, cameraRotation)
+                            }
+
+                            override fun onSurfaceSizeChanged(size: Size) {
+                                surfaceWidth = size.width
+                                surfaceHeight = size.height
                             }
                         },
                         this,
@@ -317,8 +330,8 @@ open class CameraActivity: AppCompatActivity(),
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         if (requestCode == PERMISSIONS_REQUEST) {
             if (grantResults.isNotEmpty()
-                && grantResults[0] == PackageManager.PERMISSION_GRANTED
-                && grantResults[1] == PackageManager.PERMISSION_GRANTED) {
+                && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // && grantResults[1] == PackageManager.PERMISSION_GRANTED) {
                 setFragment()
             }
             else {
@@ -338,9 +351,28 @@ open class CameraActivity: AppCompatActivity(),
         }
     }
 
+    private fun requestPermission2() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (shouldShowRequestPermissionRationale(PERMISSION_STORAGE)) {
+                Toast.makeText(this,
+                    "Camera permission is required",
+                    Toast.LENGTH_LONG).show()
+            }
+            requestPermissions(arrayOf(PERMISSION_STORAGE), PERMISSIONS_REQUEST)
+        }
+    }
+
     private fun hasPermission(): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             return checkSelfPermission(PERMISSION_CAMERA) == PackageManager.PERMISSION_GRANTED
+        } else {
+            return true
+        }
+    }
+
+    private fun hasPermission2(): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            return checkSelfPermission(PERMISSION_STORAGE) == PackageManager.PERMISSION_GRANTED
         } else {
             return true
         }
@@ -385,5 +417,6 @@ open class CameraActivity: AppCompatActivity(),
     companion object {
         const val PERMISSIONS_REQUEST = 1000
         const val PERMISSION_CAMERA = Manifest.permission.CAMERA
+        const val PERMISSION_STORAGE = Manifest.permission.WRITE_EXTERNAL_STORAGE
     }
 }

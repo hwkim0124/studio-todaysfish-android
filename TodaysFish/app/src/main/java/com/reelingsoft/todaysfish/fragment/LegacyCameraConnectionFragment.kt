@@ -4,6 +4,8 @@ package com.reelingsoft.todaysfish.fragment
 import android.graphics.SurfaceTexture
 import android.hardware.Camera
 import android.os.Bundle
+import android.os.Handler
+import android.os.HandlerThread
 import android.support.v4.app.Fragment
 import android.util.Size
 import android.view.LayoutInflater
@@ -13,6 +15,7 @@ import android.view.ViewGroup
 import com.reelingsoft.todaysfish.R
 import com.reelingsoft.todaysfish.customview.AutoFitTextureView
 import com.reelingsoft.todaysfish.utility.ImageUtils
+import timber.log.Timber
 import java.io.IOException
 
 
@@ -27,6 +30,9 @@ class LegacyCameraConnectionFragment : Fragment() {
 
     /** The layout identifier to inflate for this Fragment. */
     private var layoutId = 0
+
+    /** An additional thread for running tasks that shouldn't block the UI. */
+    private var backgroundThread: HandlerThread? = null
 
 
     fun setup(callback: Camera.PreviewCallback, layoutId: Int, desiredSize: Size) {
@@ -106,6 +112,7 @@ class LegacyCameraConnectionFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
+        startBackgroundThread()
 
         // When the screen is turned off and turned back on, the SurfaceTexture is already
         // available, and "onSurfaceTextureAvailable" will not be called. In that case, we can open
@@ -121,7 +128,31 @@ class LegacyCameraConnectionFragment : Fragment() {
 
     override fun onPause() {
         stopCamera()
+        stopBackgroundThread()
         super.onPause()
+    }
+
+
+    /** Starts a background thread and its {@link Handler}. */
+    private fun startBackgroundThread() {
+        backgroundThread = HandlerThread("ImageListener")
+        backgroundThread?.apply {
+            this.start()
+            // backgroundHandler = Handler(this.looper)
+        }
+    }
+
+
+    /** Stops the background thread and its {@link Handler}. */
+    private fun stopBackgroundThread() {
+        backgroundThread?.quitSafely()
+        try {
+            backgroundThread?.join()
+            backgroundThread = null
+            // backgroundHandler = null
+        } catch (e: InterruptedException) {
+            Timber.e("InterruptedException occurred!")
+        }
     }
 
 

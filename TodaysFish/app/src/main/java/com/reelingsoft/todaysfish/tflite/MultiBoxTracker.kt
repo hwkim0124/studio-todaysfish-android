@@ -18,9 +18,12 @@ class MultiBoxTracker(context: Context) {
     private lateinit var borderedText: BorderedText
     private val boxPaint = Paint()
 
-    private lateinit var frameToCanvasMatrix: Matrix
+    private var frameToCanvasMatrix: Matrix? = null
     private var frameWidth = 0
     private var frameHeight = 0
+    private var surfaceWidth = 0
+    private var surfaceHeight = 0
+
     private var sensorOrientation = 0
     private var initialized = false
 
@@ -46,6 +49,7 @@ class MultiBoxTracker(context: Context) {
     )
 
     init {
+        availableColors = ArrayDeque<Int>()
         for (color in COLORS) {
             availableColors.add(color)
         }
@@ -67,9 +71,11 @@ class MultiBoxTracker(context: Context) {
 
 
     @Synchronized
-    fun onFrame(width: Int, height: Int, rowStride: Int, orientation: Int, frame: ByteArray, timestamp: Long) {
+    fun onFrame(width: Int, height: Int, viewWidth: Int, viewHeight: Int, rowStride: Int, orientation: Int, frame: ByteArray, timestamp: Long) {
         frameWidth = width
         frameHeight = height
+        surfaceWidth = viewWidth
+        surfaceHeight = viewHeight
         sensorOrientation = orientation
         initialized = true
     }
@@ -77,34 +83,47 @@ class MultiBoxTracker(context: Context) {
 
     @Synchronized
     fun draw(canvas: Canvas) {
+        if (frameWidth == 0 || frameHeight == 0) {
+            return
+        }
+
         val rotated = sensorOrientation % 180 == 90
         val multiplier = min(
-            canvas.height / (if (rotated) frameWidth else frameHeight),
-            canvas.width / (if (rotated) frameHeight else frameWidth)
+            surfaceHeight / (if (rotated) frameWidth else frameHeight).toFloat(),
+            surfaceWidth / (if (rotated) frameHeight else frameWidth).toFloat()
         )
 
-        frameToCanvasMatrix = ImageUtils.getTransformationMatrix(
+        val matrix = ImageUtils.getTransformationMatrix(
             frameWidth,
             frameHeight,
-            (multiplier * (if (rotated) frameHeight else frameWidth)),
-            (multiplier * (if (rotated) frameWidth else frameHeight)),
+            (multiplier * (if (rotated) frameHeight else frameWidth)).toInt(),
+            (multiplier * (if (rotated) frameWidth else frameHeight)).toInt(),
             sensorOrientation,
             false
         )
+        matrix.postTranslate((canvas.width - surfaceWidth)/2.0f, (canvas.height-surfaceHeight)/2.0f)
+        frameToCanvasMatrix = matrix
 
         for (obj in trackedObjects) {
-            getFrameToCanvasMatrix().mapRect(obj.location)
+            val location = RectF(obj.location)
+            frameToCanvasMatrix!!.mapRect(location)
             boxPaint.color = obj.color
 
             val cornerSize = 1.0f
-            canvas.drawRoundRect(obj.location, cornerSize, cornerSize, boxPaint)
+            canvas.drawRoundRect(location, cornerSize, cornerSize, boxPaint)
 
             val labelText = "${obj.title} ${obj.confidence*100}"
             borderedText.drawText(
                 canvas,
-                obj.location.left + cornerSize, obj.location.top,
+                location.left + cornerSize, location.top,
                 labelText,
                 boxPaint
+            )
+
+            canvas.drawLine(100.0f, 200.0f, 1000.0f, 200.0f, boxPaint)
+
+            Timber.d(
+                "Bordered text: $location"
             )
         }
     }
@@ -126,9 +145,13 @@ class MultiBoxTracker(context: Context) {
         frame: ByteArray,
         timestamp: Long
     ) {
-        val rectsToTrack = mutableListOf<Pair<Float, Detector.Recognition>>()
-        val rgbFrameToScreen = Matrix(getFrameToCanvasMatrix())
+        val matrix = getFrameToCanvasMatrix()
+        matrix ?: return
 
+        val rectsToTrack = mutableListOf<Pair<Float, Detector.Recognition>>()
+        val rgbFrameToScreen = Matrix(matrix)
+
+        screenRects.clear()
         for (r in results) {
             if (r.location == null) {
                 continue
@@ -172,7 +195,7 @@ class MultiBoxTracker(context: Context) {
     }
 
 
-    private fun getFrameToCanvasMatrix(): Matrix {
+    private fun getFrameToCanvasMatrix(): Matrix? {
         return frameToCanvasMatrix
     }
 

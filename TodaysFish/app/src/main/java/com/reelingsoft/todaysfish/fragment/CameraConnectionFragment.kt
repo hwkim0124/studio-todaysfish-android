@@ -245,7 +245,7 @@ class CameraConnectionFragment: Fragment() {
             throw RuntimeException(text)
         }
 
-        cameraConnectionCallback.onPreviewSizeChosen(previewSize, sensorOrientation)
+        cameraConnectionCallback.onPreviewSizeChosen2(previewSize, sensorOrientation)
     }
 
 
@@ -367,7 +367,7 @@ class CameraConnectionFragment: Fragment() {
                             )
                             // Flash is automatically enabled when necessary.
                             previewRequestBuilder.set(
-                                CaptureRequest.CONTROL_AF_MODE,
+                                CaptureRequest.CONTROL_AE_MODE,
                                 CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH
                             )
 
@@ -429,6 +429,8 @@ class CameraConnectionFragment: Fragment() {
             matrix.postRotate(180.0f, centerX, centerY)
         }
         textureView.setTransform(matrix)
+
+        cameraConnectionCallback.onSurfaceSizeChanged(Size(viewWidth, viewHeight))
     }
 
 
@@ -518,7 +520,8 @@ class CameraConnectionFragment: Fragment() {
      * known.
      */
     interface ConnectionCallback {
-        fun onPreviewSizeChosen(size: Size, cameraRotation: Int)
+        fun onPreviewSizeChosen2(size: Size, cameraRotation: Int)
+        fun onSurfaceSizeChanged(size: Size)
     }
 
 

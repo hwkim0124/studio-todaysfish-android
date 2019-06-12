@@ -4,6 +4,7 @@ import android.content.res.AssetManager
 import android.graphics.Bitmap
 import android.graphics.RectF
 import android.os.Trace
+import com.reelingsoft.todaysfish.tflite.ClassLabels.NUM_CLASSES
 import org.tensorflow.lite.Interpreter
 import timber.log.Timber
 import java.io.FileInputStream
@@ -24,9 +25,9 @@ class TFLiteDetectorModel : Detector {
     // Kotlin convention that if the last parameter of a function accepts a function,
     // a lambda expression that is passed as the corresponding argument can be placed
     // outside the parentheses.
-    private val outputLocations = Array(NUM_DETECTIONS) {FloatArray(4)}
-    private val outputClasses = FloatArray(NUM_DETECTIONS)
-    private val outputScores = FloatArray(NUM_DETECTIONS)
+    private val outputLocations = Array(NUM_DETECTIONS) { FloatArray(4) }
+    private val outputClasses = FloatArray(NUM_CLASSES)
+    private val outputAnchors = FloatArray(NUM_CLASSES)
 
     var tfLite: Interpreter? = null
     lateinit var imageData: ByteBuffer
@@ -51,37 +52,63 @@ class TFLiteDetectorModel : Detector {
                     imageData.putFloat((((pixel shr 16) and 0xFF) - IMAGE_MEAN) / IMAGE_STDEV)
                     imageData.putFloat((((pixel shr 8) and 0xFF) - IMAGE_MEAN) / IMAGE_STDEV)
                     imageData.putFloat(((pixel and 0xFF) - IMAGE_MEAN) / IMAGE_STDEV)
+                    /*
+                    // For fake quantization?
+                    imageData.putFloat((((pixel shr 16) and 0xFF)).toFloat())
+                    imageData.putFloat((((pixel shr 8) and 0xFF)).toFloat())
+                    imageData.putFloat(((pixel and 0xFF)).toFloat())
+                    */
                 }
             }
         }
         Trace.endSection()
 
         Trace.beginSection("feed")
-        val inputArray = arrayOf({imageData})
+        val inputArray = arrayOf(imageData)
         val outputMap = mutableMapOf<Int, Any>()
         outputMap[0] = outputLocations
         outputMap[1] = outputClasses
-        outputMap[2] = outputScores
+        outputMap[2] = outputAnchors
         Trace.endSection()
 
         Trace.beginSection("run")
         tfLite?.runForMultipleInputsOutputs(inputArray, outputMap)
+        // tfLite?.run(imageData, outputClasses)
         Trace.endSection()
 
+        val sorted = outputClasses.sortedDescending()
+
         val recognitions = arrayListOf<Detector.Recognition>()
-        for (i in 0 until NUM_DETECTIONS) {
+        for (i in 0 until 5) { // NUM_DETECTIONS) {
+            /*
             val rect = RectF(
                 outputLocations[i][1] * inputWidth,
                 outputLocations[i][0] * inputHeight,
                 outputLocations[i][3] * inputWidth,
                 outputLocations[i][2] * inputHeight
             )
+            */
+            val score = sorted[i]
+            val idxClass = outputClasses.indexOf(score)
+            val idxAnchor = outputAnchors[idxClass].toInt()
+            val anchor = outputLocations[idxAnchor]
+
+            val x1 = anchor[1] * inputWidth
+            val y1 = anchor[0] * inputHeight
+            val x2 = anchor[3] * inputWidth
+            val y2 = anchor[2] * inputHeight
+
+            val rect = RectF(
+                x1, y1, x2, y2
+            )
+
             recognitions.add(
                 Detector.Recognition(
-                    i.toString(),
-                    ClassLabels.getClassName(outputClasses[i].toInt()),
-                    outputScores[i], rect)
+                    idxClass.toString(),
+                    ClassLabels.getClassName(idxClass),
+                    score, rect)
             )
+            break
         }
         Trace.endSection()
 
@@ -103,8 +130,9 @@ class TFLiteDetectorModel : Detector {
 
     companion object {
         const val INPUT_WIDTH = 320
-        const val INPUT_HEIGHT = 256
-        const val NUM_DETECTIONS = 5
+        const val INPUT_HEIGHT = 240
+        const val NUM_DETECTIONS = 385
+        const val NUM_CLASSES = 36
         const val NUM_THREADS = 4
         const val IMAGE_MEAN = 127.5f // 128.0f
         const val IMAGE_STDEV = 127.5f // 128.0f
@@ -125,7 +153,7 @@ class TFLiteDetectorModel : Detector {
             modelFileName: String,
             inputWidth: Int = INPUT_WIDTH,
             inputHeight: Int = INPUT_HEIGHT,
-            isQuantized: Boolean = true
+            isQuantized: Boolean = false
         ): Detector {
             val model = TFLiteDetectorModel()
             model.inputWidth = inputWidth
@@ -145,7 +173,7 @@ class TFLiteDetectorModel : Detector {
             Timber.d("Model Quantized: $isQuantized")
 
             val numBytesPerChannel = if (isQuantized) 1 else 4
-            model.imageData = ByteBuffer.allocateDirect(1 * inputHeight * inputWidth * numBytesPerChannel)
+            model.imageData = ByteBuffer.allocateDirect(1 * inputHeight * inputWidth * 3 * numBytesPerChannel)
             model.imageData.order(ByteOrder.nativeOrder())
             model.intValues = IntArray(inputWidth * inputHeight)
             return model
