@@ -112,7 +112,11 @@ class MultiBoxTracker(context: Context) {
             val cornerSize = 1.0f
             canvas.drawRoundRect(location, cornerSize, cornerSize, boxPaint)
 
-            val labelText = "${obj.title} ${obj.confidence*100}"
+            val textScore = "%.2f".format(obj.confidence)
+            val textStart = "%.0f".format(obj.location.top)
+            val textWidth = "%.0f".format(obj.location.right - obj.location.left)
+
+            val labelText = "${obj.title} $textScore $textStart $textWidth"
             borderedText.drawText(
                 canvas,
                 location.left + cornerSize, location.top,
@@ -120,7 +124,7 @@ class MultiBoxTracker(context: Context) {
                 boxPaint
             )
 
-            canvas.drawLine(100.0f, 200.0f, 1000.0f, 200.0f, boxPaint)
+            // canvas.drawLine(100.0f, 200.0f, 1000.0f, 200.0f, boxPaint)
 
             Timber.d(
                 "Bordered text: $location"

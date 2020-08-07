@@ -4,7 +4,6 @@ import android.content.res.AssetManager
 import android.graphics.Bitmap
 import android.graphics.RectF
 import android.os.Trace
-import com.reelingsoft.todaysfish.tflite.ClassLabels.NUM_CLASSES
 import org.tensorflow.lite.Interpreter
 import timber.log.Timber
 import java.io.FileInputStream
@@ -26,8 +25,9 @@ class TFLiteDetectorModel : Detector {
     // a lambda expression that is passed as the corresponding argument can be placed
     // outside the parentheses.
     private val outputLocations = Array(NUM_DETECTIONS) { FloatArray(4) }
-    private val outputClasses = FloatArray(NUM_CLASSES)
-    private val outputAnchors = FloatArray(NUM_CLASSES)
+    private val outputClasses = Array(NUM_DETECTIONS) { FloatArray(NUM_CLASSES)}
+    private val outputScores = FloatArray(36)  //NUM_CLASSES)
+    private val outputIndice = FloatArray(36)   // NUM_CLASSES)
 
     var tfLite: Interpreter? = null
     lateinit var imageData: ByteBuffer
@@ -68,7 +68,8 @@ class TFLiteDetectorModel : Detector {
         val outputMap = mutableMapOf<Int, Any>()
         outputMap[0] = outputLocations
         outputMap[1] = outputClasses
-        outputMap[2] = outputAnchors
+        outputMap[2] = outputIndice
+        outputMap[3] = outputScores
         Trace.endSection()
 
         Trace.beginSection("run")
@@ -76,7 +77,7 @@ class TFLiteDetectorModel : Detector {
         // tfLite?.run(imageData, outputClasses)
         Trace.endSection()
 
-        val sorted = outputClasses.sortedDescending()
+        val sorted = outputScores.sortedDescending()
 
         val recognitions = arrayListOf<Detector.Recognition>()
         for (i in 0 until 5) { // NUM_DETECTIONS) {
@@ -88,26 +89,30 @@ class TFLiteDetectorModel : Detector {
                 outputLocations[i][2] * inputHeight
             )
             */
-            val score = sorted[i]
-            val idxClass = outputClasses.indexOf(score)
-            val idxAnchor = outputAnchors[idxClass].toInt()
+            val score = sorted[1]
+            val idxClass = outputScores.indexOf(score)
+            val idxAnchor = outputIndice[idxClass].toInt()
             val anchor = outputLocations[idxAnchor]
+            val classes = outputClasses[idxAnchor]
 
-            val x1 = anchor[1] * inputWidth
-            val y1 = anchor[0] * inputHeight
-            val x2 = anchor[3] * inputWidth
-            val y2 = anchor[2] * inputHeight
+            if (classes[0] < 1.0f) {
+                val x1 = anchor[1] * inputWidth
+                val y1 = anchor[0] * inputHeight
+                val x2 = anchor[3] * inputWidth
+                val y2 = anchor[2] * inputHeight
 
-            val rect = RectF(
-                x1, y1, x2, y2
-            )
+                val rect = RectF(
+                    x1, y1, x2, y2
+                )
 
-            recognitions.add(
-                Detector.Recognition(
-                    idxClass.toString(),
-                    ClassLabels.getClassName(idxClass),
-                    score, rect)
-            )
+                recognitions.add(
+                    Detector.Recognition(
+                        idxClass.toString(),
+                        ClassLabels.getClassName(idxClass),
+                        score, rect
+                    )
+                )
+            }
             break
         }
         Trace.endSection()
@@ -129,9 +134,9 @@ class TFLiteDetectorModel : Detector {
     }
 
     companion object {
-        const val INPUT_WIDTH = 320
-        const val INPUT_HEIGHT = 240
-        const val NUM_DETECTIONS = 385
+        const val INPUT_WIDTH = 320  // 320
+        const val INPUT_HEIGHT = 240  // 240  //240
+        const val NUM_DETECTIONS = 580  // 580  // 960
         const val NUM_CLASSES = 36
         const val NUM_THREADS = 4
         const val IMAGE_MEAN = 127.5f // 128.0f

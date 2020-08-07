@@ -1,6 +1,11 @@
 package com.reelingsoft.todaysfish.activity
 
+import android.content.Context
 import android.graphics.*
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.media.ImageReader
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
@@ -18,7 +23,7 @@ import kotlinx.android.synthetic.main.activity_preview.*
 import timber.log.Timber
 import java.io.IOException
 
-class PreviewActivity : CameraActivity(), ImageReader.OnImageAvailableListener {
+class PreviewActivity : CameraActivity(), ImageReader.OnImageAvailableListener, SensorEventListener {
 
     private var timestamp: Long = 0
     private var lastProcessingTimeMs: Long = 0
@@ -39,6 +44,15 @@ class PreviewActivity : CameraActivity(), ImageReader.OnImageAvailableListener {
 
     private var luminanceCopy: ByteArray? = null
 
+    private lateinit var sensorManager: SensorManager
+    private var mRotateSensor: Sensor? = null
+    private var mAcceloSensor: Sensor? = null
+
+    private var mAngleXZ: Double = 0.0
+    private var mAngleYZ: Double = 0.0
+    private var mAccelX: Double = 0.0
+    private var mAccelY: Double = 0.0
+    private var mAccelZ: Double = 0.0
 
     /*
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,6 +60,65 @@ class PreviewActivity : CameraActivity(), ImageReader.OnImageAvailableListener {
         setContentView(R.layout.activity_preview)
     }
     */
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+
+        if (sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR) != null) {
+            val rotSensors: List<Sensor> = sensorManager.getSensorList(Sensor.TYPE_ROTATION_VECTOR)
+            mRotateSensor = rotSensors.firstOrNull()
+        }
+        if (sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null) {
+            mAcceloSensor = sensorManager.getSensorList(Sensor.TYPE_ACCELEROMETER).firstOrNull()
+        }
+    }
+
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
+    }
+
+    override fun onSensorChanged(event: SensorEvent?) {
+        if (event != null) {
+            when (event.sensor.type) {
+                Sensor.TYPE_ROTATION_VECTOR -> {
+                    var rotX = event.values[0]
+                    var rotY = event.values[1]
+                    var rotZ = event.values[2]
+                    // Timber.d("Rotation vector: $rotX, $rotY, $rotZ")
+                }
+
+                Sensor.TYPE_ACCELEROMETER -> {
+                    val accX = event.values[0]
+                    val accY = event.values[1]
+                    val accZ = event.values[2]
+
+                    val angleXZ = Math.atan2(accX.toDouble(), accZ.toDouble()) * 180 / Math.PI
+                    val angleYZ = Math.atan2(accY.toDouble(), accZ.toDouble()) * 180 / Math.PI
+                    // Timber.d("Acceleromter: $accX, $accY, $accZ, angleXZ: $angleXZ, angleYZ: $angleYZ")
+
+                    mAngleXZ = angleXZ
+                    mAngleYZ = angleYZ
+                }
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        mRotateSensor?.also {
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
+        }
+        mAcceloSensor?.also {
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        sensorManager.unregisterListener(this)
+    }
 
     override fun onPreviewSizeChosen(size: Size, rotation: Int) {
         val textSizePix = TypedValue.applyDimension(
@@ -95,6 +168,13 @@ class PreviewActivity : CameraActivity(), ImageReader.OnImageAvailableListener {
         overlay_tracking.addCallback(object: OverlayView.DrawCallback{
             override fun drawCallback(canvas: Canvas) {
                 tracker.draw(canvas)
+
+                val paint = Paint()
+                paint.color = Color.BLUE
+                paint.textSize = 72.0f
+
+                val angleText = "${String.format("%.2f", mAngleXZ)}, ${String.format("%.2f", mAngleYZ)}"
+                canvas.drawText(angleText, 720.0f, 480.0f, paint)
             }
         })
     }
@@ -200,10 +280,10 @@ class PreviewActivity : CameraActivity(), ImageReader.OnImageAvailableListener {
 
 
     companion object {
-        private const val MODEL_INPUT_WIDTH = 320
-        private const val MODEL_INPUT_HEIGHT = 240
-        private const val DETECTOR_MODEL_FILE = "shufflenet.tflite"
-        private const val DETECTOR_MINIMUM_CONFIDENCE = 0.5f
+        private const val MODEL_INPUT_WIDTH = 320  // 320
+        private const val MODEL_INPUT_HEIGHT = 240  // 240  // 240
+        private const val DETECTOR_MODEL_FILE = "fisherdet.tflite"  // "fisherdet.tflite"
+        private const val DETECTOR_MINIMUM_CONFIDENCE = 0.1f
         private const val DESIRED_PREVIEW_WIDTH = 640
         private const val DESIRED_PREVIEW_HEIGHT = 480
         private const val SAVE_PREVIEW_BITMAP = false
